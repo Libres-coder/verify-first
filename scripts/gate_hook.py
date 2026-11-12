@@ -27,7 +27,7 @@ def main():
     if not COMMIT_RE.search(cmd):
         return 0
     try:
-        p = subprocess.run([sys.executable, GATE, "--repo", os.getcwd()],
+        p = subprocess.run([sys.executable, GATE, "--repo", os.getcwd(), "--require-structure"],
                            capture_output=True, text=True, timeout=30,
                            encoding="utf-8", errors="replace")
     except Exception as e:

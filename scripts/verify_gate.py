@@ -20,10 +20,13 @@ repos that SHOULD follow the pipeline.
 import argparse
 import glob
 import os
+import re
 import sys
 import time
 
 IGNORE_DIRS = {".git", "node_modules", "__pycache__", "graphify-out"}
+# Bookkeeping/community files never invalidate evidence by themselves.
+DEFAULT_IGNORES = ["PROGRESS.md", "README*", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*", ".gitignore"]
 
 
 def find_verify_dirs(repo):
@@ -78,6 +81,9 @@ def main():
     ap.add_argument("--ignore", action="append", default=[],
                     help="glob patterns for source files exempt from the staleness check")
     ap.add_argument("--strict", action="store_true")
+    ap.add_argument("--require-structure", action="store_true",
+                    help="require every evidence file to contain a fenced code block "
+                         "and a tier keyword (measured/inferred/guessed)")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -97,7 +103,41 @@ def main():
               "before committing.")
         return 1
 
-    src_newest, changed = newest_source(repo, ev, args.ignore)
+    if args.require_structure:
+        tier_re = re.compile(r"measured|inferred|guessed", re.IGNORECASE)
+        valid, invalid = [], []
+        for f in ev:
+            try:
+                body = open(f, "r", encoding="utf-8-sig", errors="replace").read()
+            except OSError:
+                invalid.append((f, "unreadable"))
+                continue
+            fences = body.count("```")
+            has_tier = bool(tier_re.search(body))
+            if fences >= 2 and has_tier:
+                valid.append(f)
+            else:
+                reason = []
+                if fences < 2:
+                    reason.append("no fenced output block")
+                if not has_tier:
+                    reason.append("no tier label")
+                invalid.append((f, ", ".join(reason)))
+        if not valid:
+            print("VERIFY GATE FAIL: no evidence file passes structure validation.")
+            for f, why in invalid[:10]:
+                print("  %s: %s" % (os.path.relpath(f, repo), why))
+            print("Evidence must contain the captured command output (fenced block) "
+                  "and a tier label (measured/inferred/guessed).")
+            return 1
+        if invalid:
+            print("verify-gate: note - %d evidence file(s) failed structure validation "
+                  "and were ignored:" % len(invalid))
+            for f, why in invalid[:5]:
+                print("  %s: %s" % (os.path.relpath(f, repo), why))
+        ev = valid
+
+    src_newest, changed = newest_source(repo, ev, DEFAULT_IGNORES + args.ignore)
     ev_newest = max(os.path.getmtime(f) for f in ev)
     # 1 second epsilon for filesystem timestamp granularity
     if src_newest > ev_newest + 1:

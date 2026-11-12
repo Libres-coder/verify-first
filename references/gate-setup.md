@@ -1,8 +1,8 @@
-# 证据门禁部署(verify_gate)
+# Evidence gate deployment (verify_gate)
 
-## 本地 hook(拦截 git commit)
+## Local hook (blocks git commit)
 
-项目 `.claude/settings.json`:
+Project `.claude/settings.json`:
 
 ```json
 {
@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"<verify-first 安装路径>/scripts/gate_hook.py\"",
+            "command": "python \"<verify-first install path>/scripts/gate_hook.py\"",
             "timeout": 30
           }
         ]
@@ -23,11 +23,14 @@
 }
 ```
 
-gate_hook.py 只拦截 `git commit`(含 `git -C <path> commit`),其余命令零开销放行;门禁失败时以 exit 2 阻止提交并把原因显示给用户。门禁自身崩溃时放行并告警(不因 hook 故障锁死仓库)。
+gate_hook.py matches only `git commit` (including `git -C <path> commit`); every other
+command passes through untouched. On gate failure it exits 2, blocking the commit and
+showing the reason. If the gate itself crashes, the commit is allowed with a warning
+(never brick a repo because the hook broke).
 
-## CI 门禁(PR 级)
+## CI gate (PR level)
 
-仓库 `.github/workflows/verify.yml`:
+`.github/workflows/verify.yml`:
 
 ```yaml
 name: verify-gate
@@ -45,18 +48,32 @@ jobs:
           python-version: "3.11"
       - name: Evidence gate
         run: |
-          curl -fsSL -o /tmp/verify_gate.py <verify-first 发布地址>/scripts/verify_gate.py
-          python /tmp/verify_gate.py --repo . --strict
+          curl -fsSL -o /tmp/verify_gate.py <verify-first release URL>/scripts/verify_gate.py
+          python /tmp/verify_gate.py --repo . --strict --require-structure
 ```
 
-注意:CI 拉取的仓库不含本地证据(证据应随仓库提交 —— 阶段 4 的落盘目录在仓库内,提交时一并入库,这正是"证据随代码走"的设计);`--strict` 保证声称走 verify-first 的仓库缺验证技能时 CI 直接失败。
+Note: evidence lives inside the repository (`verify-<app>/evidence/`), so CI sees it -
+evidence travels with the code by design. `--strict` makes repos that claim verify-first
+fail when the verify skill is missing.
 
-## 门禁语义
+## Gate semantics
 
-| 状态 | exit | 行为 |
+| State | exit | Behavior |
 |---|---|---|
-| 证据存在且比最新源码新 | 0 | 放行 |
-| 无证据 / 证据过期 | 1 | 拦截并列出过期文件 |
-| 无 verify-<app> 技能(非 verify-first 项目) | 2 | 放行(--strict 下改判失败) |
+| evidence exists and is newer than newest source | 0 | pass |
+| no evidence / evidence stale | 1 | block, list stale files |
+| no verify-<app> skill (not a verify-first project) | 2 | pass (with --strict: fail) |
 
-豁免:`--ignore GLOB` 排除无需验证的文件(如纯文档);`.claude/` 整树与 .git、node_modules 等不计入源码。
+Exemption: `--ignore GLOB` excludes files that need no verification (docs only).
+`.claude/` and .git, node_modules etc. never count as source.
+
+## Structure validation (anti-fake-evidence, v1.1)
+
+`--require-structure` adds a content check on every evidence file:
+
+- must contain at least one fenced code block (```) - the captured output;
+- must contain at least one tier keyword (measured / inferred / guessed).
+
+Files failing this count as missing evidence. This blocks empty placeholder files and
+narrative-only notes; it cannot prove the output is genuine (a human review stage still
+spot-checks tiers, per stages.md stage 5).

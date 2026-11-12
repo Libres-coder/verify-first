@@ -15,11 +15,14 @@ HOOK = os.path.join(HERE, "..", "scripts", "gate_hook.py")
 T0 = time.time() - 1000  # baseline seconds
 
 
-def touch(path, mtime):
+def touch(path, mtime, content="x\n"):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        f.write("x\n")
+        f.write(content)
     os.utime(path, (mtime, mtime))
+
+
+EVIDENCE = "```\nHTTP 200 OK\n```\nmeasured\n"
 
 
 def run_gate(args):
@@ -59,7 +62,7 @@ class GateTests(unittest.TestCase):
             repo = self._repo(tmp)
             touch(os.path.join(repo, "src", "app.py"), T0)
             touch(os.path.join(repo, ".claude", "skills", "verify-app",
-                               "evidence", "d1", "e.md"), T0 + 500)
+                               "evidence", "d1", "e.md"), T0 + 500, EVIDENCE)
             p = run_gate(["--repo", repo])
             self.assertEqual(p.returncode, 0, p.stdout)
 
@@ -67,7 +70,7 @@ class GateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._repo(tmp)
             touch(os.path.join(repo, ".claude", "skills", "verify-app",
-                               "evidence", "d1", "e.md"), T0)
+                               "evidence", "d1", "e.md"), T0, EVIDENCE)
             touch(os.path.join(repo, "src", "app.py"), T0 + 500)
             p = run_gate(["--repo", repo])
             self.assertEqual(p.returncode, 1, p.stdout)
@@ -78,7 +81,7 @@ class GateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._repo(tmp)
             touch(os.path.join(repo, ".claude", "skills", "verify-app",
-                               "evidence", "d1", "e.md"), T0)
+                               "evidence", "d1", "e.md"), T0, EVIDENCE)
             touch(os.path.join(repo, "docs", "notes.md"), T0 + 500)
             p = run_gate(["--repo", repo, "--ignore", "*.md"])
             self.assertEqual(p.returncode, 0, p.stdout)
@@ -87,7 +90,7 @@ class GateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = self._repo(tmp)
             touch(os.path.join(repo, ".claude", "skills", "verify-app",
-                               "evidence", "d1", "e.md"), T0)
+                               "evidence", "d1", "e.md"), T0, EVIDENCE)
             touch(os.path.join(repo, "src", "app.py"), T0 + 500)
             # non-commit command -> allow
             p = run_hook({"tool_input": {"command": "git status"}}, repo)
@@ -105,7 +108,7 @@ class GateTests(unittest.TestCase):
             repo = self._repo(tmp)
             touch(os.path.join(repo, "src", "app.py"), T0)
             touch(os.path.join(repo, ".claude", "skills", "verify-app",
-                               "evidence", "d1", "e.md"), T0 + 500)
+                               "evidence", "d1", "e.md"), T0 + 500, EVIDENCE)
             p = run_hook({"tool_input": {"command": "git commit -m x"}}, repo)
             self.assertEqual(p.returncode, 0, p.stderr)
 

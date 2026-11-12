@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0] - 2026-11-13
+
+### Added
+- `--require-structure` evidence validation: every evidence file must contain a fenced
+  code block (captured output) and a tier label (measured/inferred/guessed); files
+  failing this are ignored, and the gate fails when none remain. The PreToolUse hook
+  enables it by default - closes the "empty/fake evidence file" hole.
+- Default ignores for bookkeeping files (PROGRESS.md, README*, LICENSE*, CHANGELOG*,
+  CONTRIBUTING*, .gitignore): they never invalidate evidence by themselves (found by
+  dogfooding: a PROGRESS.md update had marked evidence stale).
+
+### Changed
+- All skill docs translated to English (SKILL.md + references); Chinese trigger words
+  kept in the description for CJK users. README.zh-CN.md retained.
+
 ## [1.0.0] - 2026-11-13
 
 ### Added

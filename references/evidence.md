@@ -1,29 +1,35 @@
-# 证据标准
+# Evidence standards
 
-本流水线的全部可信度建立在证据上。证据分三档,任何报告必须标注档位:
+Everything this pipeline trusts rests on evidence. Three tiers, and every report must
+label its tier:
 
-| 档位 | 定义 | 示例 |
+| Tier | Definition | Example |
 |---|---|---|
-| **measured(实测)** | 真实命令/真实路径运行后的可观测输出 | `curl -s localhost:3000/api/todos` 返回体、verify-<app> 的屏幕截图 + 状态断言 |
-| **inferred(推断)** | 由实测结果推理得出,未直接观测 | "因为 A 接口返回 200,推断 B 模块正常" |
-| **guessed(猜测)** | 无实证 | "应该可以工作" |
+| **measured** | observable output of a real command / real path run | response body of `curl -s localhost:3000/api/todos`; verify-<app> screenshot + state assertion |
+| **inferred** | derived from measured results, not directly observed | "A returned 200, so module B is fine" |
+| **guessed** | no evidence | "should work" |
 
-## 证明标准
+## Proof standards
 
-证明标准(真实用户路径、动作+结果状态、副作用验证、mock 边界、dry-run 实测、清理后存活)与 `create-verification-skill` 的 Evidence 段保持一致 —— **以生成器的当前版本为准**,本文件不复制其条文以免漂移。本文件补充三件生成器没有的东西:档位体系、落盘约定、反模式清单。
+Proof standards (real user path, action+result state, side-effect verification, mock
+boundaries, dry-run observation, evidence surviving cleanup) follow `create-verification-skill`'s
+Evidence section - **the generator's current version is authoritative**; this file does
+not duplicate them to avoid drift. This pipeline adds three things the generator does
+not have: the tier system, the persistence convention, and the anti-pattern list.
 
-### 本流水线的补充:三档标注(每条证据必须标注)
+### Pipeline addition: tier labels (every evidence item carries one)
 
-## 证据落盘约定
+### Persistence convention
 
-- 路径:`<repo>/.claude/skills/verify-<app>/evidence/<YYYY-MM-DD>/`;
-- 命名:`<验收标准序号>-<简述>.md` + 附件(截图 png、转录 txt);
-- 每条证据记录:命令/路径、关键输出摘录、结果状态、档位标注(measured/inferred/guessed)。
+- Path: `<repo>/.claude/skills/verify-<app>/evidence/<YYYY-MM-DD>/`;
+- Naming: `<criterion-id>-<short>.md` + attachments (png screenshots, txt transcripts);
+- Each item records: command/path, key output excerpt, result state, tier label
+  (measured/inferred/guessed).
 
-## 反模式(出现即重做)
+## Anti-patterns (redo when seen)
 
-- "应该可以了"式的口头完成;
-- 只贴最后一行输出(丢失根因信息);
-- 改了测试让它通过(而非修复实现);
-- 验证脚本只测快乐路径,不测失败路径;
-- 证据目录为空但 PR 声称"已测试"。
+- "should be fine" verbal completion;
+- pasting only the last output line (loses the root cause);
+- weakening the test to make it pass (instead of fixing the implementation);
+- verification scripts testing only the happy path, never failures;
+- an empty evidence directory while the PR claims "tested".

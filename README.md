@@ -29,6 +29,10 @@ python scripts/verify_gate.py --repo . --strict # for CI on verify-first repos
 - **exit 1**: no evidence, or source changed after the last verification (stale);
 - **exit 2**: not a verify-first project -> pass through.
 
+`--require-structure` (on by default in the hook) additionally requires every evidence
+file to carry a fenced output block and a tier label - empty or narrative-only evidence
+is ignored, and the gate fails when nothing structured remains.
+
 Wire it as a Claude Code PreToolUse hook to block `git commit`
 (see `references/gate-setup.md`), or run it in CI on pull requests. Evidence lives in
 `.claude/skills/verify-<app>/evidence/<date>/` and **travels with the code**.

@@ -1,69 +1,107 @@
-# 五阶段详解
+# Stage details
 
-## 阶段 1:Spec —— 验收标准写死
+## Stage 1: Spec - criteria written down
 
-**工具**:mattpocock `to-spec`。注意:to-spec 是 `disable-model-invocation`,**只能由用户运行 `/to-spec` 触发**,代理无法自动执行它 —— 请用户运行,或(无 tracker / 用户不配合时)由本流水线直接写轻量 `spec.md`。产品取舍类问题按 SKILL.md 规则 3 向用户确认(to-spec 的"不访谈用户"只约束其自身的 spec 合成,不覆盖本流水线的产品决策确认)。
+**Tool**: mattpocock `to-spec`. Note: to-spec is `disable-model-invocation` - **only
+the user can trigger it via `/to-spec`**; an executing agent cannot. Ask the user to run
+it, or (no tracker / user unavailable) write a lightweight `spec.md` directly. Product
+trade-offs are still confirmed with the user per SKILL.md rule 3 (to-spec's "do not
+interview the user" only constrains its own synthesis, not this pipeline's product
+decisions).
 
-**产出**:`spec.md`(或 issue),每条需求形如:
+**Output**: `spec.md` (or issues), each requirement shaped like:
 
 ```markdown
-## 需求:用户可创建待办
-- 验收:POST /api/todos 后 GET /api/todos 能读到该条(命令可判定)
-- 验收:前端表单提交后列表出现新条目(UI 路径可判定)
-- 非目标:拖拽排序(不在本期)
+## Requirement: users can create a todo
+- Accept: after POST /api/todos, GET /api/todos returns the item (command-judgeable)
+- Accept: after the form submits, the list shows the new row (UI-path judgeable)
+- Non-goals: drag sorting (not this iteration)
 ```
 
-**退出条件**:每条需求都有 ≥1 条可判定验收标准;`非目标` 显式列出。验收标准必须写明**判定方式**(命令/URL/UI 路径/可观测状态),不能是"界面美观"这类主观词 —— 主观要求单独标注"人工验收",**并在阶段 5 前取得用户签字记录,否则按未验证处理**。更新 `PROGRESS.md`(本阶段做了什么/证据路径/下一步)。
+**Exit condition**: every requirement has >= 1 judgeable acceptance criterion;
+`non-goals` are explicit. Each criterion names its **judging method** (command / URL /
+UI path / observable state) - subjective words like "looks nice" are not allowed;
+subjective requirements are marked "manual acceptance" and **must have the user's sign-off
+before stage 5 or they count as unverified**. Update `PROGRESS.md` (what was done /
+evidence paths / next step).
 
-**弱模型提示**:规格写完后,自己读一遍,把无法用命令/URL 判定的标准逐条改成可判定形式或标注人工验收。
+**Weak-model note**: re-read the spec and rewrite every criterion that cannot be judged
+by a command/URL into one that can, or mark it manual.
 
-## 阶段 2:Architect —— 蓝图先行
+## Stage 2: Architect - blueprint first
 
-**工具**:feature-dev 的 `code-architect` 代理(子代理)。
+**Tool**: feature-dev `code-architect` agent (subagent).
 
-**产出**:架构蓝图文档 —— 组件划分、关键类型/接口签名、文件清单(新增/修改)、数据流、技术选型理由。若蓝图与 spec 冲突,以"改 spec"或"改蓝图"二选一解决,不得带着冲突开工。
+**Output**: architecture blueprint - component breakdown, key type/interface
+signatures, file list (new/modified), data flow, tech-choice rationale. If the blueprint
+conflicts with the spec, resolve one or the other explicitly; never start with a live
+conflict.
 
-**退出条件**:蓝图覆盖 spec 全部需求;每个组件的职责一句话说得清;文件清单具体到路径。更新 `PROGRESS.md`。
+**Exit condition**: blueprint covers every spec requirement; each component's job fits
+in one sentence; file list is path-specific. Update `PROGRESS.md`.
 
-## 阶段 3:Build —— 按验收标准增量实现
+## Stage 3: Build - implement criteria incrementally
 
-**工具**:ds-plan-loop(分步计划)+ ds-verify-loop(每次改动的检查循环)。
+**Tool**: ds-plan-loop (step plan) + ds-verify-loop (per-change check loop).
 
-**流程**:
-1. 按验收标准拆步骤(一条标准一步或几步,每步有可检查产物);
-2. 每步:最小实现 → 跑真实检查(有测试跑测试;无测试先写最小失败检查)→ 证据记录;
-3. 一步通过才进下一步;同一步失败两次 → ds-unstick。
+**Flow**:
+1. Break acceptance criteria into steps (one criterion = one or a few steps, each with a
+   checkable artifact);
+2. Per step: smallest implementation -> run the real check (tests if they exist;
+   otherwise write the smallest failing check first) -> record the evidence;
+3. A step passes before the next one starts; the same step failing twice -> ds-unstick.
 
-**退出条件**:spec 全部验收标准有对应实现;**每条有检查证据(命令 + 输出片段),或显式列入「待阶段 4 真机验证」递延清单**(典型:UI 类验收标准 —— 验证技能要到阶段 4 才生成,阶段 3 只做代码级检查,不得假装已验);未实现项显式列出并说明原因(需要用户确认)。更新 `PROGRESS.md`(含递延清单)。
+**Exit condition**: every spec criterion has an implementation; **each has check
+evidence (command + output excerpt) OR is explicitly listed in the "deferred to stage 4"
+list** (typically UI criteria - the verification harness only exists after stage 4; do
+not pretend stage 3 verified them); unimplemented items listed with reasons (confirmed
+with the user). Update `PROGRESS.md` (including the deferral list).
 
-## 阶段 4:Verify —— 真机驱动验证(强制闸门)
+## Stage 4: Verify - drive the real app (mandatory gate)
 
-**工具**:pstack `create-verification-skill`(生成 verify-<app> 项目级验证技能)。
+**Tool**: pstack `create-verification-skill` (generates a project-local verify-<app>).
 
-**流程**:
-1. 仓库无 `verify-<app>` → 运行 create-verification-skill:访谈仓库(界面/启动方式/驱动方式/证据/隔离)→ 生成技能(Launch/Doctor/Drive/Evidence/Cleanup + 特性地图)→ **先证明生成的技能本身能跑**(它自己要求:端到端跑一遍,清理后证据仍在);
-2. 用 verify-<app> 跑特性地图,**覆盖 = 阶段 3 递延清单全部项 + 本任务改动触及的其他验收标准**("相关"的判定:本任务改动的文件/接口所对应的验收标准,加上特性地图中本次新增的项);
-3. 证据落盘:`verify-<app>/evidence/<日期>/`(截图、终端转录、响应体、日志)。
+**Flow**:
+1. No `verify-<app>` yet -> run create-verification-skill: interview the repo (surface /
+   run / drive / observe / isolate) -> generate the skill (Launch/Doctor/Drive/Evidence/
+   Cleanup + feature map) -> **prove the generated skill itself first** (its own
+   requirement: run it end to end once, cleanup, confirm evidence survives);
+2. Drive the feature map with verify-<app>; **coverage = every item deferred from stage
+   3 + other criteria the change touches** ("touches" = criteria corresponding to the
+   files/interfaces this change modified, plus new feature-map entries);
+3. Persist evidence to `verify-<app>/evidence/<date>/` (screenshots, terminal
+   transcripts, response bodies, logs).
 
-**退出条件**:递延清单全部项 + 改动触及的验收标准都有真机证据;证据路径列表写进 PROGRESS.md 并随阶段 5 入 PR。**本阶段是执行纪律的硬性要求:没有它,阶段 5 不得开始。** 如果应用确实无法本地驱动(如依赖生产环境),用最小可驱动替身(容器/本地栈)并**明确列出替身与真实目标的差异**(这些差异视为未验证项)。更新 `PROGRESS.md`。
+**Exit condition**: every deferred item and every touched criterion has real-app
+evidence; evidence paths listed in PROGRESS.md and carried into stage 5. **This stage is
+the hard requirement of the pipeline: stage 5 does not start without it.** If the app
+genuinely cannot be driven locally (production-only dependency), use the minimal drivable
+stand-in (container/local stack) and **list every difference from the real target**
+(those differences count as unverified). Update `PROGRESS.md`.
 
-## 阶段 5:Ship —— 证据清单入 PR
+## Stage 5: Ship - evidence table into the PR
 
-**工具**:ds-review-loop(作者 + 新上下文审查员)+ commit-commands + 本技能的 `scripts/verify_gate.py`。
+**Tool**: ds-review-loop (author + fresh-context reviewer) + commit-commands + this
+skill's `scripts/verify_gate.py`.
 
-**提交前门禁(生产机制)**:`python <verify-first>/scripts/verify_gate.py --repo <仓库>` —— 无证据或证据过期(源码比证据新)时 exit 1,拒绝提交。推荐挂到项目 `.claude/settings.json` 的 PreToolUse hook(拦截 `git commit`,配置示例见 `references/gate-setup.md`),CI 上以 `--strict` 运行。
+**Pre-commit gate (production mechanism)**: `python <verify-first>/scripts/verify_gate.py
+--repo <repo>` - exit 1 when evidence is missing or stale (source newer than evidence).
+Recommended: wire into the project's `.claude/settings.json` PreToolUse hook (blocks `git
+commit`; setup example in `references/gate-setup.md`); run it in CI with `--strict`.
 
-**PR 描述模板**:
+**PR description template**:
 
 ```markdown
-## 验收标准与证据
-| 验收标准 | 证据 | 状态 |
+## Acceptance criteria and evidence
+| Criterion | Evidence | Status |
 |---|---|---|
-| POST /api/todos 可创建 | verify-todo/evidence/.../todos.md | ✅ 真机 |
+| POST /api/todos creates | verify-todo/evidence/.../todos.md | OK real-app |
 | ... | ... | ... |
 
-## 未验证项与风险
-- (列出阶段 4 未覆盖项及原因)
+## Unverified items and risks
+- (items not covered in stage 4 and why)
 ```
 
-**退出条件**:PR 描述证据清单完整;未验证项显式标注;ds-review-loop 双方一致(或达到轮次上限并记录分歧);审查中含一次证据档位抽查。更新 `PROGRESS.md`。
+**Exit condition**: PR evidence table complete; unverified items labeled; ds-review-loop
+agreement (or round cap recorded with the disagreement); one evidence-tier spot check
+done. Update `PROGRESS.md`.

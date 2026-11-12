@@ -1,28 +1,35 @@
-# 弱模型补偿规则(DeepSeek 等)
+# Weak-model compensation rules (DeepSeek et al.)
 
-本流水线在弱模型上运行时的额外纪律。触发条件:主会话模型是 deepseek-* / 其他非 Claude 模型,或观察到以下症状(跳步、假完成、死磕、长任务漂移)。
+Extra discipline for running this pipeline on weaker models. Trigger: the session model
+is deepseek-* / another non-Claude model, or symptoms are observed (skipped steps, fake
+completion, fix-looping, long-run drift).
 
-## 规则(全程生效)
+## Rules (always on)
 
-1. **短循环**:每步 ≤ 3 个动作(改一处、跑一次检查、读输出),超过就拆;
-2. **硬上限**:同一修复尝试 2 次失败即 ds-unstick(换前提、测假设),不许第 3 次微调;
-3. **单一变量**:一次只改一个东西,否则无法归因;
-4. **防漂移**:多阶段任务维护 `PROGRESS.md`(每阶段:做了什么/证据在哪/下一步),每轮开始先读;
-5. **上下文瘦身**:大文件按段读、日志取关键行、大范围搜索派子代理;
-6. **声明档位**:每条结论标注 measured/inferred/guessed(见 evidence.md),弱模型最爱把 inferred 说成 measured —— 复查自己写的证据档位。
+1. **Short loops**: <= 3 actions per step (change one thing, run one check, read the
+   output); split anything larger;
+2. **Hard caps**: two failed attempts at the same fix -> ds-unstick (change the premise,
+   test the assumption); no third micro-variation;
+3. **One variable at a time**: otherwise attribution is impossible;
+4. **Drift control**: for multi-stage work keep PROGRESS.md (per stage: what was done /
+   where the evidence is / next step) and read it at the start of every round;
+5. **Context hygiene**: read files in ranges, excerpt logs, delegate wide searches to
+   subagents;
+6. **Declare tiers**: label every conclusion measured/inferred/guessed (see evidence.md);
+   weaker models love to promote inferred to measured - re-check your own labels.
 
-## 弱模型高发失败点与对策
+## Common weak-model failures and counters
 
-| 失败点 | 对策 |
+| Failure | Counter |
 |---|---|
-| 跳过阶段 4(验证),直接宣称完成 | 闸门机制:无证据目录 = 未完成(SKILL.md 的执行纪律要求;这是自律规则,本技能无法真正阻止执行者违反) |
-| 编造 API/参数 | 阶段 3 每次改动必须跑真实检查;不确定的库 API 先 context7 查 |
-| 验证脚本只测快乐路径 | evidence.md 反模式清单;review 阶段专门查 |
-| 长任务后半段遗忘 spec | PROGRESS.md + 阶段 1 验收标准列表,每步对照 |
-| 输出冗长、上下文膨胀 | 报告按"结论 + 证据路径"格式,不贴大段原文 |
+| Skips stage 4, declares done | Gate: no evidence directory = not done (an execution-discipline rule in SKILL.md; the skill cannot literally prevent violations) |
+| Invents APIs/parameters | Stage 3 runs the real check after every change; look up unsure library APIs via context7 |
+| Verification tests only happy paths | evidence.md anti-pattern list; a dedicated check in the review stage |
+| Forgets the spec in long tasks | PROGRESS.md + stage-1 criteria list reviewed at every step |
+| Verbose output bloating context | Report format = conclusion + evidence path, not raw dumps |
 
-## 与现有技能的分工(不重复)
+## Division of labor (no duplication)
 
-- ds-mode/ds-principles:单任务内的工作风格与工程法则;
-- ds-plan-loop/ds-verify-loop/ds-unstick:本流水线阶段 3 的执行引擎;
-- 本文件:只讲"流水线场景下弱模型特有的补偿点",与上述技能互补。
+- ds-mode / ds-principles: working style and engineering rules within a task;
+- ds-plan-loop / ds-verify-loop / ds-unstick: this pipeline's stage-3 execution engine;
+- This file: only what is pipeline-specific about compensating weak models.
