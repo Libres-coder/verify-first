@@ -121,5 +121,89 @@ class GateTests(unittest.TestCase):
             self.assertEqual(p.returncode, 0)
 
 
+class GitGateTests(unittest.TestCase):
+    def _git_repo(self, tmp, name="repo"):
+        repo = os.path.join(tmp, name)
+        os.makedirs(repo)
+        run = lambda *a: subprocess.run(["git", "-C", repo] + list(a),
+                                        capture_output=True, text=True)
+        run("init", "-q", "-b", "main")
+        return repo, run
+
+    def _seed(self, repo, run, mtime=T0):
+        touch(os.path.join(repo, "src", "app.py"), mtime)
+        touch(os.path.join(repo, ".claude", "skills", "verify-app",
+                           "evidence", "d1", "e.md"), mtime, EVIDENCE)
+        run("add", "-A")
+        run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "seed")
+
+    def test_stamp_requires_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _ = self._git_repo(tmp)
+            touch(os.path.join(repo, ".claude", "skills", "verify-app",
+                               "evidence", "d1", "e.md"), T0, EVIDENCE)
+            p = run_gate(["--repo", repo, "--stamp"])
+            self.assertEqual(p.returncode, 1, p.stdout)
+
+    def test_stamp_then_gate_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run = self._git_repo(tmp)
+            self._seed(repo, run)
+            p = run_gate(["--repo", repo, "--stamp"])
+            self.assertEqual(p.returncode, 0, p.stdout)
+            self.assertTrue(os.path.exists(os.path.join(
+                repo, ".claude", "skills", "verify-app", "verified.json")))
+            p = run_gate(["--repo", repo])
+            self.assertEqual(p.returncode, 0, p.stdout)
+            self.assertIn("no source changes since verified commit", p.stdout)
+
+    def test_uncommitted_change_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run = self._git_repo(tmp)
+            self._seed(repo, run)
+            self.assertEqual(run_gate(["--repo", repo, "--stamp"]).returncode, 0)
+            with open(os.path.join(repo, "src", "app.py"), "a", encoding="utf-8") as f:
+                f.write("# change\n")
+            p = run_gate(["--repo", repo])
+            self.assertEqual(p.returncode, 1, p.stdout)
+            self.assertIn("src/app.py", p.stdout)
+
+    def test_committed_change_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run = self._git_repo(tmp)
+            self._seed(repo, run)
+            self.assertEqual(run_gate(["--repo", repo, "--stamp"]).returncode, 0)
+            with open(os.path.join(repo, "src", "app.py"), "a", encoding="utf-8") as f:
+                f.write("# change\n")
+            run("add", "-A")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "change")
+            p = run_gate(["--repo", repo])
+            self.assertEqual(p.returncode, 1, p.stdout)
+
+    def test_fresh_clone_passes(self):
+        """Regression: mtime-based checks misjudge a fresh clone; the stamp must not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run = self._git_repo(tmp)
+            self._seed(repo, run)
+            self.assertEqual(run_gate(["--repo", repo, "--stamp"]).returncode, 0)
+            run("add", "-A")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "stamp")
+            clone = os.path.join(tmp, "clone")
+            subprocess.run(["git", "clone", "-q", repo, clone], capture_output=True)
+            p = run_gate(["--repo", clone])
+            self.assertEqual(p.returncode, 0, p.stdout)
+            self.assertIn("no source changes since verified commit", p.stdout)
+
+    def test_untracked_source_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run = self._git_repo(tmp)
+            self._seed(repo, run)
+            self.assertEqual(run_gate(["--repo", repo, "--stamp"]).returncode, 0)
+            touch(os.path.join(repo, "src", "new.py"), T0 + 100)
+            p = run_gate(["--repo", repo])
+            self.assertEqual(p.returncode, 1, p.stdout)
+            self.assertIn("src/new.py", p.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

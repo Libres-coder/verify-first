@@ -19,8 +19,10 @@ repos that SHOULD follow the pipeline.
 """
 import argparse
 import glob
+import json
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -74,6 +76,54 @@ def fnmatch(path, pattern):
     return _fn.fnmatch(os.path.basename(path), pattern) or _fn.fnmatch(path, pattern)
 
 
+def _git(repo, *args):
+    try:
+        p = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
+                           text=True, timeout=30, encoding="utf-8", errors="replace")
+        return p.returncode, p.stdout
+    except Exception:
+        return 1, ""
+
+
+def git_head(repo):
+    rc, out = _git(repo, "rev-parse", "HEAD")
+    return out.strip() if rc == 0 and out.strip() else None
+
+
+def pick_verify_dir(repo, app=None):
+    dirs = find_verify_dirs(repo)
+    if app:
+        dirs = [d for d in dirs if os.path.basename(d) == "verify-" + app]
+    return sorted(dirs)[0] if dirs else None
+
+
+def find_stamp(repo, app=None):
+    d = pick_verify_dir(repo, app)
+    if not d:
+        return None
+    try:
+        with open(os.path.join(d, "verified.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def changed_since(repo, sha, ignores):
+    """Repo-relative source files changed since <sha> (tracked + untracked,
+    excluding .claude/ and ignore globs). None when git cannot answer."""
+    if not sha:
+        return None
+    rc, out = _git(repo, "diff", "--name-only", sha, "--", ".")
+    if rc != 0:
+        return None
+    files = [f for f in out.splitlines() if f.strip()]
+    rc2, out2 = _git(repo, "ls-files", "--others", "--exclude-standard")
+    if rc2 == 0:
+        files += [f for f in out2.splitlines() if f.strip()]
+    return [f for f in files
+            if not f.startswith(".claude/") and not any(fnmatch(f, ig) for ig in ignores)]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=os.getcwd())
@@ -84,6 +134,9 @@ def main():
     ap.add_argument("--require-structure", action="store_true",
                     help="require every evidence file to contain a fenced code block "
                          "and a tier keyword (measured/inferred/guessed)")
+    ap.add_argument("--stamp", action="store_true",
+                    help="after a successful verification run, record the current git "
+                         "HEAD as the verified commit (verified.json in the verify dir)")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -136,6 +189,42 @@ def main():
             for f, why in invalid[:5]:
                 print("  %s: %s" % (os.path.relpath(f, repo), why))
         ev = valid
+
+    if args.stamp:
+        head = git_head(repo)
+        target = pick_verify_dir(repo, args.app)
+        if not head or not target:
+            print("VERIFY GATE FAIL: --stamp requires a git repository and a verify-<app> dir.")
+            return 1
+        stamp = {"commit": head,
+                 "verified_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                 "evidence_files": len(ev)}
+        with open(os.path.join(target, "verified.json"), "w", encoding="utf-8") as f:
+            json.dump(stamp, f, ensure_ascii=False, indent=2)
+        print("verify-gate: stamped %s at commit %s (%d evidence file(s))"
+              % (os.path.relpath(target, repo), head[:12], len(ev)))
+        return 0
+
+    # ---- freshness: git-aware when a verified stamp exists, else mtime ----
+    stamp = find_stamp(repo, args.app)
+    head = git_head(repo)
+    if stamp and head:
+        changed = changed_since(repo, stamp.get("commit", ""),
+                                DEFAULT_IGNORES + args.ignore)
+        if changed is not None:
+            if changed:
+                print("VERIFY GATE FAIL: evidence is stale - source changed since the "
+                      "verified commit %s." % str(stamp.get("commit", "?"))[:12])
+                print("Files changed since verification (max 10):")
+                for f in changed[:10]:
+                    print("  " + f)
+                print("Re-run the verify-<app> skill, then run this gate with --stamp, "
+                      "before committing.")
+                return 1
+            print("verify-gate: OK - %d evidence file(s); no source changes since "
+                  "verified commit %s." % (len(ev), str(stamp.get("commit", "?"))[:12]))
+            return 0
+        # git could not answer (unknown sha, detached, etc.) -> fall back to mtime
 
     src_newest, changed = newest_source(repo, ev, DEFAULT_IGNORES + args.ignore)
     ev_newest = max(os.path.getmtime(f) for f in ev)

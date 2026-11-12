@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0] - 2026-11-13
+
+### Added
+- Git-aware evidence freshness: `verify_gate.py --stamp` records the verified commit
+  (`verify-<app>/verified.json`); the gate then compares the working tree against that
+  commit (tracked diff + untracked files, excluding `.claude/` and bookkeeping files).
+  Fixes mtime misjudgment on fresh clones and git checkouts; mtime remains the fallback
+  when no stamp exists or git cannot answer.
+- `test_fresh_clone_passes`: clones a stamped repo and asserts the gate passes
+  (regression pin for the mtime flaw).
+
 ## [1.1.0] - 2026-11-13
 
 ### Added

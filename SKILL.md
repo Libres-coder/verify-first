@@ -35,7 +35,9 @@ Every stage has an explicit exit condition (its evidence); evidence standards li
    verification skill, run `create-verification-skill` to generate verify-<app>; then
    drive the feature map (coverage = everything deferred from stage 3 plus criteria the
    change touches - see stages.md) and persist evidence per `references/evidence.md`.
-   **A "done" without verification evidence is not done.**
+   After a successful run, record the verified commit: `verify_gate.py --stamp` (git
+   repos; mtime fallback applies otherwise). **A "done" without verification evidence
+   is not done.**
 5. **Ship with evidence.** Before committing run `scripts/verify_gate.py` (blocks when
    evidence is missing/stale; hook and CI wiring in references/gate-setup.md); use
    commit-commands `/commit-push-pr` (PR must carry: criteria -> evidence paths;
