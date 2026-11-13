@@ -61,3 +61,10 @@ Every stage has an explicit exit condition (its evidence); evidence standards li
   change, not internal setters or test-only endpoints (see evidence.md).
 - Don't make product decisions for the user: stage-1 criteria and stage-2 trade-offs
   are confirmed with the user.
+
+## References
+
+- [stages.md](references/stages.md) - what each stage must produce before the next one starts.
+- [evidence.md](references/evidence.md) - the three evidence tiers and what counts as proof.
+- [gate-setup.md](references/gate-setup.md) - wiring the gate into a Claude Code hook and CI.
+- [weak-model.md](references/weak-model.md) - running the same pipeline on a weaker model.
